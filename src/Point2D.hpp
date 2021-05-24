@@ -24,7 +24,7 @@ class Point2D {
   T x;
   T y;
 
-  Point2D(T x, T y) : x(x), y(y)
+  Point2D(T x_, T y_) : x(x_), y(y_)
   {
   }
   Point2D() : x(0), y(0)

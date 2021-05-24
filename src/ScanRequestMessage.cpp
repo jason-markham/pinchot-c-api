@@ -13,38 +13,39 @@
 
 using namespace joescan;
 
-ScanRequest::ScanRequest(jsDataFormat format, uint32_t clientAddress,
-                         int clientPort, int scan_head_id, uint32_t interval,
+ScanRequest::ScanRequest(jsDataFormat format, uint32_t client_ip,
+                         int client_port, int scan_head_id, uint32_t interval,
                          uint32_t scanCount,
                          const jsScanHeadConfiguration &config)
 {
-  this->clientAddress = clientAddress;
-  this->clientPort = clientPort;
-  this->scan_head_id = scan_head_id;
-  this->camera_id = 0; // TODO: If these become useful, don't hardcode.
-  this->laser_id = 0;  // TODO: If these become useful, don't hardcode.
-  this->flags = 0;    // TODO: If these become useful, don't hardcode.
-  minimumLaserExposure = config.laser_on_time_min_us;
-  defaultLaserExposure = config.laser_on_time_def_us;
-  maximumLaserExposure = config.laser_on_time_max_us;
-  minimumCameraExposure = config.camera_exposure_time_min_us;
-  defaultCameraExposure = config.camera_exposure_time_def_us;
-  maximumCameraExposure = config.camera_exposure_time_max_us;
-  laserDetectionThreshold = config.laser_detection_threshold;
-  saturationThreshold = config.saturation_threshold;
-  saturationPercent = config.saturation_percentage;
+  m_client_ip = client_ip;
+  m_client_port = client_port;
+  m_scan_head_id = scan_head_id;
+  m_camera_id = 0; // TODO: If these become useful, don't hardcode.
+  m_laser_id = 0;  // TODO: If these become useful, don't hardcode.
+  m_flags = 0;    // TODO: If these become useful, don't hardcode.
+  m_magic = kCommandMagic;
+  m_laser_exposure_min_us = config.laser_on_time_min_us;
+  m_laser_exposure_def_us = config.laser_on_time_def_us;
+  m_laser_exposure_max_us = config.laser_on_time_max_us;
+  m_camera_exposure_min_us = config.camera_exposure_time_min_us;
+  m_camera_exposure_def_us = config.camera_exposure_time_def_us;
+  m_camera_exposure_max_us = config.camera_exposure_time_max_us;
+  m_laser_detection_threshold = config.laser_detection_threshold;
+  m_saturation_threshold = config.saturation_threshold;
+  m_saturation_percentage = config.saturation_percentage;
   // TODO: what to do with this?
-  averageImageIntensity = 50;
-  scanInterval = interval;
-  scanOffset = config.scan_offset_us;
+  m_average_intensity = 50;
+  m_scan_interval_us = interval;
+  m_scan_offset_us = config.scan_offset_us;
   // If the caller requested a specific number of scans, obey them, otherwise
   // let's hope they didn't mean to scan for a whole week.
-  numberOfScans = (scanCount == 0) ? 1000000 : scanCount;
-  startCol = 0;
-  endCol = 1455;
+  m_number_of_scans = (scanCount == 0) ? 1000000 : scanCount;
+  m_start_col = 0;
+  m_end_col = 1455;
 
-  dataTypes = DataFormats::GetDataType(format);
-  steps = DataFormats::GetStep(format);
+  m_data_types = DataFormats::GetDataType(format);
+  m_steps = DataFormats::GetStep(format);
 }
 
 ScanRequest::ScanRequest(const Datagram &datagram)
@@ -54,82 +55,82 @@ ScanRequest::ScanRequest(const Datagram &datagram)
   }
   int index = 0;
 
-  magic = ntohs(*reinterpret_cast<const uint16_t *>(&datagram[index]));
-  if (magic != kCommandMagic) {
+  m_magic = ntohs(*reinterpret_cast<const uint16_t *>(&datagram[index]));
+  if (m_magic != kCommandMagic) {
     throw std::exception();
   }
   index += sizeof(uint16_t);
 
   uint8_t size = datagram[index++];
 
-  requestType = UdpPacketType::_from_integral(datagram[index++]);
+  m_request_type = UdpPacketType::_from_integral(datagram[index++]);
 
-  clientAddress =
+  m_client_ip =
     ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
   index += sizeof(uint32_t);
-  clientPort = ntohs(*(reinterpret_cast<const uint16_t *>(&datagram[index])));
+  m_client_port = ntohs(*(reinterpret_cast<const uint16_t *>(&datagram[index])));
   index += sizeof(uint16_t);
-  requestSequence = datagram[index++];
+  m_request_sequence = datagram[index++];
 
-  scan_head_id = datagram[index++];
-  camera_id = datagram[index++];
-  laser_id = datagram[index++];
+  m_scan_head_id = datagram[index++];
+  m_camera_id = datagram[index++];
+  m_laser_id = datagram[index++];
   DEPRECATED_DO_NOT_USE = datagram[index++];
-  flags = datagram[index++];
+  m_flags = datagram[index++];
 
-  minimumLaserExposure =
+  m_laser_exposure_min_us =
     ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
   index += sizeof(uint32_t);
-  defaultLaserExposure =
+  m_laser_exposure_def_us =
     ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
   index += sizeof(uint32_t);
-  maximumLaserExposure =
-    ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
-  index += sizeof(uint32_t);
-
-  minimumCameraExposure =
-    ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
-  index += sizeof(uint32_t);
-  defaultCameraExposure =
-    ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
-  index += sizeof(uint32_t);
-  maximumCameraExposure =
+  m_laser_exposure_max_us =
     ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
   index += sizeof(uint32_t);
 
-  laserDetectionThreshold =
+  m_camera_exposure_min_us =
     ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
   index += sizeof(uint32_t);
-  saturationThreshold =
+  m_camera_exposure_def_us =
     ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
   index += sizeof(uint32_t);
-  saturationPercent =
-    ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
-  index += sizeof(uint32_t);
-  averageImageIntensity =
+  m_camera_exposure_max_us =
     ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
   index += sizeof(uint32_t);
 
-  scanInterval = ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
+  m_laser_detection_threshold =
+    ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
   index += sizeof(uint32_t);
-  scanOffset = ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
+  m_saturation_threshold =
+    ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
   index += sizeof(uint32_t);
-  numberOfScans =
+  m_saturation_percentage =
+    ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
+  index += sizeof(uint32_t);
+  m_average_intensity =
     ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
   index += sizeof(uint32_t);
 
-  dataTypes = ntohs(*(reinterpret_cast<const uint16_t *>(&datagram[index])));
+  m_scan_interval_us = ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
+  index += sizeof(uint32_t);
+  m_scan_offset_us = ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
+  index += sizeof(uint32_t);
+  m_number_of_scans =
+    ntohl(*(reinterpret_cast<const uint32_t *>(&datagram[index])));
+  index += sizeof(uint32_t);
+
+  m_data_types = ntohs(*(reinterpret_cast<const uint16_t *>(&datagram[index])));
   index += sizeof(uint16_t);
-  startCol = ntohs(*(reinterpret_cast<const uint16_t *>(&datagram[index])));
+  m_start_col = ntohs(*(reinterpret_cast<const uint16_t *>(&datagram[index])));
   index += sizeof(uint16_t);
-  endCol = ntohs(*(reinterpret_cast<const uint16_t *>(&datagram[index])));
+  m_end_col = ntohs(*(reinterpret_cast<const uint16_t *>(&datagram[index])));
   index += sizeof(uint16_t);
 
-  for (int i = 1; i <= dataTypes; i <<= 1) {
-    if (i & dataTypes) {
+  for (int i = 1; i <= m_data_types; i <<= 1) {
+    if (i & m_data_types) {
       uint16_t stepVal =
         ntohs(*(reinterpret_cast<const uint16_t *>(&datagram[index])));
-      steps.push_back(stepVal);
+      m_steps.push_back(stepVal);
       index += sizeof(uint16_t);
     }
   }
@@ -144,7 +145,7 @@ ScanRequest ScanRequest::Deserialize(const Datagram &datagram)
   return ScanRequest(datagram);
 }
 
-Datagram ScanRequest::Serialize(uint8_t requestSequence)
+Datagram ScanRequest::Serialize(uint8_t request_sequence)
 {
   std::vector<uint8_t> scanRequestPacket;
   scanRequestPacket.reserve(Length());
@@ -153,48 +154,48 @@ Datagram ScanRequest::Serialize(uint8_t requestSequence)
   index += SerializeIntegralToBytes(scanRequestPacket, &kCommandMagic);
 
   scanRequestPacket.push_back(Length());
-  scanRequestPacket.push_back(requestType);
+  scanRequestPacket.push_back(m_request_type);
   index += 2;
 
-  index += SerializeIntegralToBytes(scanRequestPacket, &clientAddress);
-  index += SerializeIntegralToBytes(scanRequestPacket, &clientPort);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_client_ip);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_client_port);
 
-  scanRequestPacket.push_back(requestSequence);
-  scanRequestPacket.push_back(scan_head_id);
+  scanRequestPacket.push_back(m_request_sequence);
+  scanRequestPacket.push_back(m_scan_head_id);
   // TODO: This isn't needed now, but may be useful on multi-camera systems in
   // the future
-  scanRequestPacket.push_back(camera_id);
+  scanRequestPacket.push_back(m_camera_id);
   // TODO: This also isn't needed now.
-  scanRequestPacket.push_back(laser_id);
+  scanRequestPacket.push_back(m_laser_id);
   // deprecated exposure setting
   scanRequestPacket.push_back(DEPRECATED_DO_NOT_USE);
-  scanRequestPacket.push_back(flags);
+  scanRequestPacket.push_back(m_flags);
   index += 6;
 
-  index += SerializeIntegralToBytes(scanRequestPacket, &minimumLaserExposure);
-  index += SerializeIntegralToBytes(scanRequestPacket, &defaultLaserExposure);
-  index += SerializeIntegralToBytes(scanRequestPacket, &maximumLaserExposure);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_laser_exposure_min_us);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_laser_exposure_def_us);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_laser_exposure_max_us);
 
-  index += SerializeIntegralToBytes(scanRequestPacket, &minimumCameraExposure);
-  index += SerializeIntegralToBytes(scanRequestPacket, &defaultCameraExposure);
-  index += SerializeIntegralToBytes(scanRequestPacket, &maximumCameraExposure);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_camera_exposure_min_us);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_camera_exposure_def_us);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_camera_exposure_max_us);
 
   index +=
-    SerializeIntegralToBytes(scanRequestPacket, &laserDetectionThreshold);
-  index += SerializeIntegralToBytes(scanRequestPacket, &saturationThreshold);
-  index += SerializeIntegralToBytes(scanRequestPacket, &saturationPercent);
-  index += SerializeIntegralToBytes(scanRequestPacket, &averageImageIntensity);
+    SerializeIntegralToBytes(scanRequestPacket, &m_laser_detection_threshold);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_saturation_threshold);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_saturation_percentage);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_average_intensity);
 
-  index += SerializeIntegralToBytes(scanRequestPacket, &scanInterval);
-  index += SerializeIntegralToBytes(scanRequestPacket, &scanOffset);
-  index += SerializeIntegralToBytes(scanRequestPacket, &numberOfScans);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_scan_interval_us);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_scan_offset_us);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_number_of_scans);
 
-  index += SerializeIntegralToBytes(scanRequestPacket, &dataTypes);
-  index += SerializeIntegralToBytes(scanRequestPacket, &startCol);
-  index += SerializeIntegralToBytes(scanRequestPacket, &endCol);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_data_types);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_start_col);
+  index += SerializeIntegralToBytes(scanRequestPacket, &m_end_col);
 
   // for each type, uint16 for step
-  for (const auto &step : steps) {
+  for (const auto &step : m_steps) {
     index += SerializeIntegralToBytes(scanRequestPacket, &step);
   }
 
@@ -214,57 +215,57 @@ void ScanRequest::SetDataTypesAndSteps(DataType types,
   }
 
   if (num_types == steps.size()) {
-    this->steps = steps;
-    dataTypes = types;
+    m_steps = steps;
+    m_data_types = types;
   }
 }
 
 void ScanRequest::SetLaserExposure(uint32_t min, uint32_t def, uint32_t max)
 {
   if (min <= def && def <= max) {
-    minimumLaserExposure = min;
-    defaultLaserExposure = def;
-    maximumLaserExposure = max;
+    m_laser_exposure_min_us = min;
+    m_laser_exposure_def_us = def;
+    m_laser_exposure_max_us = max;
   }
 }
 
 void ScanRequest::SetCameraExposure(uint32_t min, uint32_t def, uint32_t max)
 {
   if (min <= def && def <= max) {
-    minimumCameraExposure = min;
-    defaultCameraExposure = def;
-    maximumCameraExposure = max;
+    m_camera_exposure_min_us = min;
+    m_camera_exposure_def_us = def;
+    m_camera_exposure_max_us = max;
   }
 }
 
 bool ScanRequest::operator==(const ScanRequest &other) const
 {
   bool same = true;
-  if (magic != other.magic || requestType != other.requestType ||
-      scan_head_id != other.scan_head_id || camera_id != other.camera_id ||
-      laser_id != other.laser_id ||
-      minimumLaserExposure != other.minimumLaserExposure ||
-      defaultLaserExposure != other.defaultLaserExposure ||
-      maximumLaserExposure != other.maximumLaserExposure ||
-      minimumCameraExposure != other.minimumCameraExposure ||
-      defaultCameraExposure != other.defaultCameraExposure ||
-      maximumCameraExposure != other.maximumCameraExposure ||
-      laserDetectionThreshold != other.laserDetectionThreshold ||
-      saturationThreshold != other.saturationThreshold ||
-      saturationPercent != other.saturationPercent ||
-      averageImageIntensity != other.averageImageIntensity ||
-      scanInterval != other.scanInterval || scanOffset != other.scanOffset ||
-      numberOfScans != other.numberOfScans ||
-      clientAddress != other.clientAddress || clientPort != other.clientPort ||
-      flags != other.flags || requestSequence != other.requestSequence ||
-      dataTypes != other.dataTypes || startCol != other.startCol ||
-      endCol != other.endCol || steps.size() != other.steps.size()) {
+  if (m_magic != other.m_magic || m_request_type != other.m_request_type ||
+      m_scan_head_id != other.m_scan_head_id || m_camera_id != other.m_camera_id ||
+      m_laser_id != other.m_laser_id ||
+      m_laser_exposure_min_us != other.m_laser_exposure_min_us ||
+      m_laser_exposure_def_us != other.m_laser_exposure_def_us ||
+      m_laser_exposure_max_us != other.m_laser_exposure_max_us ||
+      m_camera_exposure_min_us != other.m_camera_exposure_min_us ||
+      m_camera_exposure_def_us != other.m_camera_exposure_def_us ||
+      m_camera_exposure_max_us != other.m_camera_exposure_max_us ||
+      m_laser_detection_threshold != other.m_laser_detection_threshold ||
+      m_saturation_threshold != other.m_saturation_threshold ||
+      m_saturation_percentage != other.m_saturation_percentage ||
+      m_average_intensity != other.m_average_intensity ||
+      m_scan_interval_us != other.m_scan_interval_us || m_scan_offset_us != other.m_scan_offset_us ||
+      m_number_of_scans != other.m_number_of_scans ||
+      m_client_ip != other.m_client_ip || m_client_port != other.m_client_port ||
+      m_flags != other.m_flags || m_request_sequence != other.m_request_sequence ||
+      m_data_types != other.m_data_types || m_start_col != other.m_start_col ||
+      m_end_col != other.m_end_col || m_steps.size() != other.m_steps.size()) {
     same = false;
   }
 
   if (same) {
-    for (unsigned int i = 0; i < steps.size(); i++) {
-      if (steps[i] != other.steps[i]) {
+    for (unsigned int i = 0; i < m_steps.size(); i++) {
+      if (m_steps[i] != other.m_steps[i]) {
         same = false;
       }
     }

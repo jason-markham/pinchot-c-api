@@ -10,6 +10,7 @@
 
 #include "BroadcastConnectMessage.hpp"
 #include "DisconnectMessage.hpp"
+#include "ImageRequestMessage.hpp"
 #include "NetworkInterface.hpp"
 #include "NetworkTypes.hpp"
 #include "Profile.hpp"
@@ -363,6 +364,69 @@ void ScanManager::StopScanning()
   sender.ClearScanRequests();
 
   state = SystemState::Connected;
+}
+
+int ScanManager::RequestImages(ScanHead *scan_head,
+                               jsScanHeadConfiguration &config)
+{
+  const uint32_t kTimeoutMs = 10000;
+  const uint32_t kPollTimeMs = 10;
+  int r = 0;
+
+  if (!IsConnected()) {
+    std::string error_msg = "Not connected.";
+    throw std::runtime_error(error_msg);
+  }
+
+  if (IsScanning()) {
+    std::string error_msg = "Already scanning.";
+    throw std::runtime_error(error_msg);
+  }
+
+  auto pair = scanners_by_id.find(scan_head->GetId());
+  if (pair == scanners_by_id.end()) {
+    std::string error_msg = "Scanner is not managed.";
+    throw std::runtime_error(error_msg);
+  }
+
+  scan_head->ReceiveStart();
+
+  double scan_interval_us = 0;
+  uint32_t num_cameras = scan_head->GetStatusMessage().GetValidCameras();
+  uint32_t camera_exposure_max = config.camera_exposure_time_max_us;
+  double rate_hz = 1.0 / (num_cameras * camera_exposure_max * 1e-6);
+  // cap the max rate at which images are done
+  if (rate_hz > 2.0) {
+    rate_hz = 2.0;
+  }
+  scan_interval_us = (1.0 / rate_hz) * 1e6;
+
+  auto port = scan_head->GetReceivePort();
+  auto id = scan_head->GetId();
+  uint32_t interval = static_cast<uint32_t>(scan_interval_us);
+  ImageRequest request(0, port, id, interval, num_cameras, config);
+
+  //sender.Send(request.Serialize(session_id), scan_head->GetIpAddress());
+
+  std::vector<std::pair<uint32_t, Datagram>> requests;
+  requests.push_back(
+    std::make_pair(scan_head->GetIpAddress(), request.Serialize(session_id)));
+  sender.EnqueueScanRequests(requests);
+  state = SystemState::Scanning;
+
+  // capture an image per camera, filter results after
+  uint32_t time_ms = 0;
+  while ((num_cameras > scan_head->AvailableProfiles()) &&
+         (time_ms < kTimeoutMs)) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(kPollTimeMs));
+    time_ms += kPollTimeMs;
+  }
+
+  sender.ClearScanRequests();
+  state = SystemState::Connected;
+
+  r = (kTimeoutMs == time_ms) ? -1 : scan_head->AvailableProfiles();
+  return r;
 }
 
 void ScanManager::SetScanRate(double rate_hz)

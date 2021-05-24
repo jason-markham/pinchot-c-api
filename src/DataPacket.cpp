@@ -38,7 +38,8 @@ DataPacket::DataPacket(uint8_t *bytes, uint32_t num_bytes,
   m_hdr.exposure_time_us = ntohs(pu16[1]);
   m_hdr.scan_head_id = pu8[4];
   m_hdr.camera_id = pu8[5];
-  m_hdr.flags = pu8[6];
+  m_hdr.laser_id = pu8[6];
+  m_hdr.flags = pu8[7];
   m_hdr.timestamp_ns = hostToNetwork<uint64_t>(pu64[1]);
   m_hdr.laser_on_time_us = ntohs(pu16[8]);
   m_hdr.data_type = ntohs(pu16[9]);

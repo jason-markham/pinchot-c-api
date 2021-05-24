@@ -12,6 +12,12 @@
 #include <string>
 #include <vector>
 
+#ifdef __linux__
+#include <arpa/inet.h>
+#else
+#include <WinSock2.h>
+#endif
+
 namespace joescan {
 /// The number of bits per byte.
 static const int kBitsPerByte = 8;
@@ -105,6 +111,14 @@ struct DatagramHeader {           // size  byte offset
  */
 #pragma pack(push, 1)
 struct InfoHeader {
+  InfoHeader() = default;
+  InfoHeader(uint8_t *buf)
+  {
+    magic = htons(*reinterpret_cast<uint16_t *>(&buf[0]));
+    size = buf[2];
+    type = buf[3];
+  }
+
   uint16_t magic;
   uint8_t size;
   uint8_t type;

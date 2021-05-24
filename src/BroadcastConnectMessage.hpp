@@ -24,13 +24,24 @@ class BroadcastConnectMessage {
   static BroadcastConnectMessage Deserialize(std::vector<uint8_t> &data);
   std::vector<uint8_t> Serialize() const;
 
-  ConnectionType GetConnectionType()
+  uint16_t GetPort()
   {
-    return packet.conn_type;
+    return packet.port;
   }
+
+  uint8_t GetScanHeadId()
+  {
+    return packet.scan_head_id;
+  }
+
   uint32_t GetSerialNumber()
   {
     return packet.serial_number;
+  }
+
+  ConnectionType GetConnectionType()
+  {
+    return packet.conn_type;
   }
 
  private:

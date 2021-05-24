@@ -180,9 +180,6 @@ typedef enum {
   JS_DATA_FORMAT_XY_FULL,
   JS_DATA_FORMAT_XY_HALF,
   JS_DATA_FORMAT_XY_QUARTER,
-
-  // Full camera pixel image.
-  JS_DATA_FORMAT_CAMERA_IMAGE_FULL,
 } jsDataFormat;
 
 /**
@@ -483,12 +480,12 @@ typedef struct {
   uint64_t encoder_values[JS_ENCODER_MAX];
   /** @brief Number of encoder values in this profile. */
   uint32_t num_encoder_values;
-  /** @brief Time in microseconds for the camera's exposure.*/
+  /** @brief Time in microseconds for the camera's exposure. */
   uint32_t camera_exposure_time_us;
   /** @brief Time in microseconds the laser is emitting. */
   uint32_t laser_on_time_us;
 
-  /** @brief The type of image data contained in the `data` array. */
+  /** @deprecated Variable serves no purpose and will be removed. */
   jsDataFormat format;
 
   /** @brief The overall height of the image in pixels. */

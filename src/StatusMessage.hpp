@@ -245,7 +245,6 @@ class StatusMessage {
     InfoHeader header;
     VersionInformation version;
 
-    /* Static Data */
     uint32_t serial_number = 0;
     uint32_t max_scan_rate = 0;
     uint32_t scan_head_ip = 0;

@@ -150,7 +150,7 @@ int ExtractFromNetworkBuffer(T &data, uint8_t *buf)
     data = ntohs(*(reinterpret_cast<T *>(buf)));
   } else if (is_uint32 || is_int32) {
     data = ntohl(*(reinterpret_cast<T *>(buf)));
-  } else if (is_uint64) {
+  } else if (is_uint64 || is_int64) {
     data = hostToNetwork(*(reinterpret_cast<T *>(buf)));
   } else {
     return -1;

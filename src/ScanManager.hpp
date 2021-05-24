@@ -132,6 +132,16 @@ class ScanManager {
   void StopScanning();
 
   /**
+   * @brief Requests an image from each camera on a given scan head.
+   *
+   * @param scan_head The `ScanHead` to get images from.
+   * @param config Configuration to use for image capture.
+   *
+   * @return The number of images collected on success, negative value on error.
+   */
+  int RequestImages(ScanHead *scan_head, jsScanHeadConfiguration &config);
+
+  /**
    * @brief Sets the rate at which new data is sent from the scan head.
    *
    * @param rate_hz The frequency of new data in hertz.

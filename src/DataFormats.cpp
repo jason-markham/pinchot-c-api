@@ -26,8 +26,6 @@ std::map<jsDataFormat, std::pair<DataType, std::vector<uint16_t>>>
 
     {JS_DATA_FORMAT_XY_QUARTER, {DataType::XYData, {4}}},
 
-    {JS_DATA_FORMAT_CAMERA_IMAGE_FULL, {DataType::Image, {1}}},
-
     // TODO: We don't know how these modes will be handled in C++ yet, so ignore
     // them for now
     //{ JS_DATA_FORMAT_SUBPIXEL, { DataType::Subpixel, {1} } }

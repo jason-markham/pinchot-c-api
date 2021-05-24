@@ -42,9 +42,6 @@ static unsigned int _data_format_to_stride(jsDataFormat fmt)
     case JS_DATA_FORMAT_XY_QUARTER:
       stride = 4;
       break;
-    case JS_DATA_FORMAT_CAMERA_IMAGE_FULL:
-      stride = 1;
-      break;
   }
 
   return stride;
@@ -484,12 +481,21 @@ int32_t jsScanSystemStartScanning(jsScanSystem scan_system, double rate_hz,
     return JS_ERROR_NOT_CONNECTED;
   }
 
+  switch (fmt) {
+  case (JS_DATA_FORMAT_XY_FULL_LM_FULL):
+  case (JS_DATA_FORMAT_XY_HALF_LM_HALF):
+  case (JS_DATA_FORMAT_XY_QUARTER_LM_QUARTER):
+  case (JS_DATA_FORMAT_XY_FULL):
+  case (JS_DATA_FORMAT_XY_HALF):
+  case (JS_DATA_FORMAT_XY_QUARTER):
+    break;
+  default:
+    return JS_ERROR_INVALID_ARGUMENT;
+  }
+
   try {
     double rate_hz_max = manager->GetMaxScanRate();
     if (rate_hz > rate_hz_max) {
-      r = JS_ERROR_INVALID_ARGUMENT;
-    } else if (JS_DATA_FORMAT_CAMERA_IMAGE_FULL == fmt) {
-      // we don't support continuous scans of image data
       r = JS_ERROR_INVALID_ARGUMENT;
     } else {
       manager->SetScanRate(rate_hz);
@@ -809,7 +815,7 @@ bool jsScanHeadIsConnected(jsScanHead scan_head)
 
     StatusMessage message = sh->GetStatusMessage();
     auto timestamp = message.GetGlobalTime();
-    if ((mgr.IsConnected()) && (0 != timestamp)) {
+    if (0 != timestamp) {
       is_connected = true;
     }
   } catch (std::exception &e) {
@@ -1010,7 +1016,7 @@ EXPORTED
 int32_t jsScanHeadGetCameraImage(jsScanHead scan_head, jsCamera camera,
                                  bool enable_lasers, jsCameraImage *image)
 {
-  int32_t r = 0;
+  int32_t r = JS_ERROR_INTERNAL;
 
   if (nullptr == scan_head) {
     return JS_ERROR_NULL_ARGUMENT;
@@ -1063,27 +1069,8 @@ int32_t jsScanHeadGetCameraImage(jsScanHead scan_head, jsCamera camera,
         config.laser_on_time_def_us = laser_def;
         config.laser_on_time_min_us = laser_min;
       }
-      sh->SetConfiguration(config);
 
-      // calculate the rate at which images are made
-      uint32_t camera_exposure_max = config.camera_exposure_time_max_us;
-      double rate_hz = 1.0 / (num_cameras * camera_exposure_max * 1e-6);
-      // cap the max rate at which images are done
-      if (rate_hz > 2.0) {
-        rate_hz = 2.0;
-      }
-      manager.SetScanRate(rate_hz);
-      manager.SetRequestedDataFormat(JS_DATA_FORMAT_CAMERA_IMAGE_FULL);
-      manager.StartScanning(sh);
-
-      // capture an image per camera, filter results after
-      while (num_cameras > sh->AvailableProfiles()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      }
-
-      manager.StopScanning();
-      // restore user's configuration settings
-      sh->SetConfiguration(user_config);
+     manager.RequestImages(sh, config);
 
       // copy the image into the jsCameraImage struct
       auto p = sh->GetProfiles(num_cameras);
@@ -1101,8 +1088,6 @@ int32_t jsScanHeadGetCameraImage(jsScanHead scan_head, jsCamera camera,
           image->num_encoder_values = static_cast<uint32_t>(e.size());
           assert(image->num_encoder_values < JS_ENCODER_MAX);
 
-          // TODO: should probably come from somewhere other than defines
-          image->format = JS_DATA_FORMAT_CAMERA_IMAGE_FULL;
           image->image_height = JS_CAMERA_IMAGE_DATA_MAX_HEIGHT;
           image->image_width = JS_CAMERA_IMAGE_DATA_MAX_WIDTH;
 

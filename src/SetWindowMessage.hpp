@@ -33,8 +33,8 @@ class SetWindowMessage {
   std::vector<WindowConstraint> Constraints() const;
 
  private:
-  std::vector<WindowConstraint> constraints;
-  uint8_t camera = 0;
+  std::vector<WindowConstraint> m_constraints;
+  uint8_t m_camera = 0;
 };
 
 // 1/1000 inch
@@ -44,24 +44,24 @@ inline void SetWindowMessage::AddConstraint(int32_t x1, int32_t y1, int32_t x2,
   Point2D<int64_t> p1(x1, y1);
   Point2D<int64_t> p2(x2, y2);
 
-  constraints.push_back(WindowConstraint(p1, p2));
+  m_constraints.push_back(WindowConstraint(p1, p2));
 }
 
 // 1/1000 inch
 inline void SetWindowMessage::AddConstraint(Point2D<int64_t> p1,
                                             Point2D<int64_t> p2)
 {
-  constraints.push_back(WindowConstraint(p1, p2));
+  m_constraints.push_back(WindowConstraint(p1, p2));
 }
 
 inline void SetWindowMessage::SetCamera(uint8_t camera)
 {
-  this->camera = camera;
+  m_camera = camera;
 }
 
 inline uint8_t SetWindowMessage::GetCameraId() const
 {
-  return camera;
+  return m_camera;
 }
 } // namespace joescan
 

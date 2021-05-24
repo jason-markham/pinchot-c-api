@@ -470,8 +470,8 @@ void ScanHead::ReceiveMain()
       nfds = static_cast<int>(m_fd) + 1;
       FD_ZERO(&rfds);
       FD_SET(m_fd, &rfds);
-      tv.tv_sec = 1;
-      tv.tv_usec = 0;
+      tv.tv_sec = 0;
+      tv.tv_usec = 50000;
 
       // Poll for activity on on the file descriptor, timeout if no activity.
       ret = select(nfds, &rfds, NULL, NULL, &tv);

@@ -33,10 +33,10 @@ struct WindowConstraint {
     constraints[1] = p2;
   }
 
-  WindowConstraint(const WindowConstraint &constraints)
+  WindowConstraint(const WindowConstraint &constraints_)
   {
     for (int i = 0; i < 2; i++) {
-      this->constraints[i] = constraints.constraints[i];
+      constraints[i] = constraints_.constraints[i];
     }
   }
 };

@@ -18,6 +18,7 @@ StatusMessage::StatusMessage()
   packet.header.magic = kResponseMagic;
   packet.header.size = kMinStatusMessageSize;
   packet.header.type = UdpPacketType::Status;
+  packet.global_time = 0;
 }
 
 StatusMessage::StatusMessage(uint32_t scan_head_ip, uint32_t serial_number,
@@ -28,6 +29,7 @@ StatusMessage::StatusMessage(uint32_t scan_head_ip, uint32_t serial_number,
   packet.serial_number = serial_number;
   packet.max_scan_rate = max_scan_rate;
   packet.version = version;
+  packet.global_time = 0;
 }
 
 StatusMessage::StatusMessage(uint8_t *bytes, uint32_t num_bytes)

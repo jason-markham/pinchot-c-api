@@ -15,7 +15,7 @@ using namespace joescan;
 
 SetWindowMessage::SetWindowMessage(int camera)
 {
-  this->camera = camera;
+  m_camera = camera;
 }
 
 SetWindowMessage SetWindowMessage::Deserialize(std::vector<uint8_t> &message)
@@ -59,8 +59,8 @@ std::vector<uint8_t> SetWindowMessage::Serialize() const
   {
     // TODO: This needs to be better explained/documented. It's not really
     // obvious as to how the `sizeof` calls relate to the message fields.
-    size_t sz = (constraints.size() * constraint_size) + (4 * sizeof(uint8_t)) +
-                sizeof(uint32_t);
+    size_t sz = (m_constraints.size() * constraint_size) +
+                (4 * sizeof(uint8_t)) + sizeof(uint32_t);
     message_size = static_cast<int>(sz);
   }
   message.reserve(message_size);
@@ -70,13 +70,13 @@ std::vector<uint8_t> SetWindowMessage::Serialize() const
   message.push_back(message_size);
   UdpPacketType type = UdpPacketType::SetWindow;
   message.push_back(type._to_integral());
-  message.push_back(camera);
+  message.push_back(m_camera);
   message.push_back(0);
   message.push_back(0);
   message.push_back(0);
   index += 6;
 
-  for (auto &window_constraint : constraints) {
+  for (auto &window_constraint : m_constraints) {
     int32_t x, y;
     // note, units are in 1/1000 inch
     x = static_cast<int32_t>(window_constraint.constraints[0].x);
@@ -96,7 +96,7 @@ void SetWindowMessage::AddConstraints(
   std::vector<WindowConstraint> &constraints)
 {
   for (auto &constraint : constraints) {
-    this->constraints.push_back(constraint);
+    m_constraints.push_back(constraint);
   }
 }
 
@@ -107,7 +107,7 @@ bool SetWindowMessage::SatisfiesConstraints(int32_t x, int32_t y)
 
 bool SetWindowMessage::SatisfiesConstraints(Point2D<int64_t> p)
 {
-  for (auto &constraint : constraints) {
+  for (auto &constraint : m_constraints) {
     if (!constraint.Satisfies(p)) {
       return false;
     }
@@ -118,5 +118,5 @@ bool SetWindowMessage::SatisfiesConstraints(Point2D<int64_t> p)
 
 std::vector<WindowConstraint> SetWindowMessage::Constraints() const
 {
-  return constraints;
+  return m_constraints;
 }
