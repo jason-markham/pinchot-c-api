@@ -8,9 +8,20 @@
 #ifndef JOESCAN_NETWORK_INCLUDES_H
 #define JOESCAN_NETWORK_INCLUDES_H
 
-#ifdef __linux__
+#if defined(_WIN32)
+// TODO: inet_addr is deprecated in Windows
+// suggested to use either inet_pton or InetPton
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <iphlpapi.h>
 
+#else //linux or macos
 #include <arpa/inet.h>
+#endif
+
+#if defined(_Win32) || defined(__APPLE__)
+
 // Windows specific includes missing in Linux
 #ifndef SOCKET
 #define SOCKET int
@@ -24,14 +35,5 @@
 #define SOCKET_ERROR -1
 #endif
 
-#else
-
-// TODO: inet_addr is deprecated in Windows
-// suggested to use either inet_pton or InetPton
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <iphlpapi.h>
-#endif
-
-#endif
+#endif //defined(_Win32) || defined(__APPLE__)
+#endif //JOESCAN_NETWORK_INCLUDES_H

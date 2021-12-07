@@ -12,10 +12,10 @@
 #include "DataPacket.hpp"
 #include "TcpSerializationHelpers.hpp"
 
-#ifdef __linux__
-#include <arpa/inet.h>
-#else
+#ifdef _Win32
 #include <WinSock2.h>
+#else
+#include <arpa/inet.h>
 #endif
 
 using namespace joescan;

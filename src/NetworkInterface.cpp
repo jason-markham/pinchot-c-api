@@ -14,25 +14,24 @@
 #include "NetworkInterface.hpp"
 #include "NetworkTypes.hpp"
 
-#ifdef __linux__
+#ifdef _Win32
+#include <ws2tcpip.h>
+#include <iphlpapi.h>
+#pragma comment(lib, "iphlpapi.lib")
+#pragma comment(lib, "ws2_32.lib")
+#else //linux or macos
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <netdb.h>
 #include <sys/types.h>
 #include <unistd.h>
-#else
-#include <ws2tcpip.h>
-#include <iphlpapi.h>
-#pragma comment(lib, "iphlpapi.lib")
-#pragma comment(lib, "ws2_32.lib")
 #endif
 
 using namespace joescan;
 
 void NetworkInterface::InitSystem(void)
 {
-#ifdef __linux__
-#else
+#ifdef _Win32
   WSADATA wsa;
   int result = WSAStartup(MAKEWORD(2, 2), &wsa);
   if (result != 0) {
@@ -45,8 +44,7 @@ void NetworkInterface::InitSystem(void)
 
 void NetworkInterface::FreeSystem(void)
 {
-#ifdef __linux__
-#else
+#ifdef _Win32
   WSACleanup();
 #endif
 }
@@ -60,10 +58,10 @@ net_iface NetworkInterface::InitBroadcastSocket(uint32_t ip, uint16_t port)
   iface = InitUDPSocket(ip, port);
   sockfd = iface.sockfd;
 
-#if __linux__
-  int bcast_en = 1;
-#else
+#if _WIN32
   char bcast_en = 1;
+#else
+  int bcast_en = 1;
 #endif
   r = setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &bcast_en, sizeof(bcast_en));
   if (SOCKET_ERROR == r) {
@@ -86,17 +84,18 @@ net_iface NetworkInterface::InitRecvSocket(uint32_t ip, uint16_t port)
   {
     int m = 0;
     int n = kRecvSocketBufferSize;
-#ifdef __linux__
-    socklen_t sz = sizeof(n);
-    r = setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (void *)&n, sz);
-    if (SOCKET_ERROR != r) {
-      r = getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (void *)&m, &sz);
-    }
-#else
+#ifdef _Win32
     int sz = sizeof(n);
     r = setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (char *)&n, sz);
     if (SOCKET_ERROR != r) {
       r = getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (char *)&m, &sz);
+    }
+
+#else
+    socklen_t sz = sizeof(n);
+    r = setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (void *) &n, sz);
+    if (SOCKET_ERROR != r) {
+        r = getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (void *) &m, &sz);
     }
 #endif
   }
@@ -115,20 +114,53 @@ net_iface NetworkInterface::InitSendSocket(uint32_t ip, uint16_t port)
 
 void NetworkInterface::CloseSocket(SOCKET sockfd)
 {
-#ifdef __linux__
-  close(sockfd);
-#else
+#ifdef _Win32
   int lastError = WSAGetLastError();
   closesocket(sockfd);
   WSASetLastError(lastError);
+#else
+  close(sockfd);
 #endif
 }
 
 std::vector<uint32_t> NetworkInterface::GetActiveIpAddresses()
 {
   std::vector<uint32_t> ip_addrs;
+#if defined(_Win32)
+    {
+        PMIB_IPADDRTABLE pIPAddrTable = nullptr;
+        DWORD dwSize = 0;
+        DWORD dwRetVal = 0;
 
-#ifdef __linux__
+        // before calling AddIPAddress we use GetIpAddrTable to get an adapter to
+        // which we can add the IP
+        pIPAddrTable = (MIB_IPADDRTABLE *)malloc(sizeof(MIB_IPADDRTABLE));
+        if (pIPAddrTable) {
+            // make an initial call to GetIpAddrTable to get the necessary size into
+            // the dwSize variable
+            if (GetIpAddrTable(pIPAddrTable, &dwSize, 0) ==
+                ERROR_INSUFFICIENT_BUFFER) {
+                free(pIPAddrTable);
+                pIPAddrTable = (MIB_IPADDRTABLE *)malloc(dwSize);
+                // make a second call to GetIpAddrTable to get the actual data we want
+                GetIpAddrTable(pIPAddrTable, &dwSize, 0);
+            }
+        }
+
+        if (pIPAddrTable) {
+            // iterate over each IP address
+            for (int n = 0; n < (int)pIPAddrTable->dwNumEntries; n++) {
+                uint32_t ip_addr = ntohl((u_long)pIPAddrTable->table[n].dwAddr);
+                if ((0 != ip_addr) && (INADDR_LOOPBACK != ip_addr)) {
+                    ip_addrs.push_back(ip_addr);
+                }
+            }
+            free(pIPAddrTable);
+        } else {
+            throw std::runtime_error("Failed to obtain network interfaces");
+        }
+    }
+#else
   {
     // BSD-style implementation
     struct ifaddrs *root_ifa;
@@ -146,40 +178,6 @@ std::vector<uint32_t> NetworkInterface::GetActiveIpAddresses()
         p = p->ifa_next;
       }
       freeifaddrs(root_ifa);
-    } else {
-      throw std::runtime_error("Failed to obtain network interfaces");
-    }
-  }
-#else
-  {
-    PMIB_IPADDRTABLE pIPAddrTable = nullptr;
-    DWORD dwSize = 0;
-    DWORD dwRetVal = 0;
-
-    // before calling AddIPAddress we use GetIpAddrTable to get an adapter to
-    // which we can add the IP
-    pIPAddrTable = (MIB_IPADDRTABLE *)malloc(sizeof(MIB_IPADDRTABLE));
-    if (pIPAddrTable) {
-      // make an initial call to GetIpAddrTable to get the necessary size into
-      // the dwSize variable
-      if (GetIpAddrTable(pIPAddrTable, &dwSize, 0) ==
-          ERROR_INSUFFICIENT_BUFFER) {
-        free(pIPAddrTable);
-        pIPAddrTable = (MIB_IPADDRTABLE *)malloc(dwSize);
-        // make a second call to GetIpAddrTable to get the actual data we want
-        GetIpAddrTable(pIPAddrTable, &dwSize, 0);
-      }
-    }
-
-    if (pIPAddrTable) {
-      // iterate over each IP address
-      for (int n = 0; n < (int)pIPAddrTable->dwNumEntries; n++) {
-        uint32_t ip_addr = ntohl((u_long)pIPAddrTable->table[n].dwAddr);
-        if ((0 != ip_addr) && (INADDR_LOOPBACK != ip_addr)) {
-          ip_addrs.push_back(ip_addr);
-        }
-      }
-      free(pIPAddrTable);
     } else {
       throw std::runtime_error("Failed to obtain network interfaces");
     }
