@@ -20,7 +20,6 @@
 #include <arpa/inet.h>
 #endif
 
-#if defined(_Win32) || defined(__APPLE__)
 
 // Windows specific includes missing in Linux
 #ifndef SOCKET
@@ -35,5 +34,4 @@
 #define SOCKET_ERROR -1
 #endif
 
-#endif //defined(_Win32) || defined(__APPLE__)
 #endif //JOESCAN_NETWORK_INCLUDES_H
