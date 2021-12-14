@@ -12,7 +12,7 @@
 #include "DataPacket.hpp"
 #include "TcpSerializationHelpers.hpp"
 
-#ifdef _Win32
+#ifdef _WIN32
 #include <WinSock2.h>
 #else
 #include <arpa/inet.h>

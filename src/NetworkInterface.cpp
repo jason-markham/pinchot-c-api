@@ -14,7 +14,7 @@
 #include "NetworkInterface.hpp"
 #include "NetworkTypes.hpp"
 
-#ifdef _Win32
+#ifdef _WIN32
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
 #pragma comment(lib, "iphlpapi.lib")
@@ -31,7 +31,7 @@ using namespace joescan;
 
 void NetworkInterface::InitSystem(void)
 {
-#ifdef _Win32
+#ifdef _WIN32
   WSADATA wsa;
   int result = WSAStartup(MAKEWORD(2, 2), &wsa);
   if (result != 0) {
@@ -44,7 +44,7 @@ void NetworkInterface::InitSystem(void)
 
 void NetworkInterface::FreeSystem(void)
 {
-#ifdef _Win32
+#ifdef _WIN32
   WSACleanup();
 #endif
 }
@@ -58,7 +58,7 @@ net_iface NetworkInterface::InitBroadcastSocket(uint32_t ip, uint16_t port)
   iface = InitUDPSocket(ip, port);
   sockfd = iface.sockfd;
 
-#if _WIN32
+#ifdef _WIN32
   char bcast_en = 1;
 #else
   int bcast_en = 1;
@@ -84,7 +84,7 @@ net_iface NetworkInterface::InitRecvSocket(uint32_t ip, uint16_t port)
   {
     int m = 0;
     int n = kRecvSocketBufferSize;
-#ifdef _Win32
+#ifdef _WIN32
     int sz = sizeof(n);
     r = setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (char *)&n, sz);
     if (SOCKET_ERROR != r) {
@@ -114,7 +114,7 @@ net_iface NetworkInterface::InitSendSocket(uint32_t ip, uint16_t port)
 
 void NetworkInterface::CloseSocket(SOCKET sockfd)
 {
-#ifdef _Win32
+#ifdef _WIN32
   int lastError = WSAGetLastError();
   closesocket(sockfd);
   WSASetLastError(lastError);
@@ -126,7 +126,7 @@ void NetworkInterface::CloseSocket(SOCKET sockfd)
 std::vector<uint32_t> NetworkInterface::GetActiveIpAddresses()
 {
   std::vector<uint32_t> ip_addrs;
-#if defined(_Win32)
+#ifdef _WIN32
     {
         PMIB_IPADDRTABLE pIPAddrTable = nullptr;
         DWORD dwSize = 0;
