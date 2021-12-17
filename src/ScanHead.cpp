@@ -393,8 +393,8 @@ void ScanHead::ProcessPacket(DataPacket &packet)
     uint32_t idx = start_column + current_packet * layout.step;
 
     for (unsigned int j = 0; j < layout.num_vals; j++) {
-      uint16_t x_raw = htons(*src++);
-      uint16_t y_raw = htons(*src++);
+      int16_t x_raw = htons(*src++);
+      int16_t y_raw = htons(*src++);
 
       if ((JS_PROFILE_DATA_INVALID_XY != x_raw) &&
           (JS_PROFILE_DATA_INVALID_XY != y_raw)) {
@@ -455,11 +455,6 @@ void ScanHead::ProcessPacket(DataPacket &packet)
 
 void ScanHead::ReceiveMain()
 {
-  int nfds;
-  fd_set rfds;
-  struct timeval tv;
-  int ret;
-
   while (0 <= m_active_count) {
     if (0 == m_active_count) {
       std::unique_lock<std::mutex> lock(m_mutex);
@@ -467,46 +462,43 @@ void ScanHead::ReceiveMain()
       m_thread_sync.notify_all();
       m_thread_sync.wait(lock);
     } else if (0 < m_active_count) {
-      nfds = static_cast<int>(m_fd) + 1;
-      FD_ZERO(&rfds);
-      FD_SET(m_fd, &rfds);
-      tv.tv_sec = 0;
-      tv.tv_usec = 50000;
+      uint8_t *buf = m_packet_buf;
+#ifdef __linux__
+      size_t len = m_packet_buf_len;
+#else
+      int len = m_packet_buf_len;
+#endif
+      int num_bytes = recv(m_fd, reinterpret_cast<char *>(buf), len, 0);
+      if (-1 == num_bytes) {
+        // socket error? keep on trying...
+        continue;
+      }
 
-      // Poll for activity on on the file descriptor, timeout if no activity.
-      ret = select(nfds, &rfds, NULL, NULL, &tv);
-      if (0 < ret) {
+      // Check to make sure we are still running in case recv returns due to
+      // its socket fd being closed.
+      if (0 < m_active_count) {
         std::unique_lock<std::mutex> lock(m_mutex);
-        // Activity indicated, read out data from socket.
-        char *buf = reinterpret_cast<char *>(m_packet_buf);
-        size_t len = m_packet_buf_len;
-        int num_bytes = recv(m_fd, buf, len, 0);
+        if (static_cast<std::size_t>(num_bytes) < sizeof(DatagramHeader)) {
+          // TODO: better error handling!
+          // throw std::runtime_error("Short header");
+          continue;
+        }
 
-        // Check to make sure we are still running in case recv returns due to
-        // its socket fd being closed.
-        if (0 < m_active_count) {
-          if (static_cast<std::size_t>(num_bytes) < sizeof(DatagramHeader)) {
-            // TODO: better error handling!
-            // throw std::runtime_error("Short header");
-            continue;
-          }
+        uint16_t magic = (m_packet_buf[0] << 8) | (m_packet_buf[1]);
+        if (kDataMagic == magic) {
+          m_packets_received++;
 
-          uint16_t magic = (m_packet_buf[0] << 8) | (m_packet_buf[1]);
-          if (kDataMagic == magic) {
-            m_packets_received++;
-
-            DataPacket packet(m_packet_buf, num_bytes, 0);
-            ProcessPacket(packet);
-          } else if (kResponseMagic == magic) {
-            StatusMessage status = StatusMessage(m_packet_buf, num_bytes);
-            m_expected_packets_received = status.GetNumPacketsSent();
-            m_expected_profiles_received = status.GetNumProfilesSent();
-            PushStatus(status);
-          } else {
-            // TODO: better error handling!
-            // throw std::runtime_error("Unknown magic");
-            continue;
-          }
+          DataPacket packet(m_packet_buf, num_bytes, 0);
+          ProcessPacket(packet);
+        } else if (kResponseMagic == magic) {
+          StatusMessage status = StatusMessage(m_packet_buf, num_bytes);
+          m_expected_packets_received = status.GetNumPacketsSent();
+          m_expected_profiles_received = status.GetNumProfilesSent();
+          PushStatus(status);
+        } else {
+          // TODO: better error handling!
+          // throw std::runtime_error("Unknown magic");
+          continue;
         }
       }
     }

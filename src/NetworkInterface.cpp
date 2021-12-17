@@ -92,12 +92,21 @@ net_iface NetworkInterface::InitRecvSocket(uint32_t ip, uint16_t port)
     if (SOCKET_ERROR != r) {
       r = getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (void *)&m, &sz);
     }
+
+    struct timeval tv;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
 #else
     int sz = sizeof(n);
     r = setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (char *)&n, sz);
     if (SOCKET_ERROR != r) {
       r = getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (char *)&m, &sz);
     }
+
+    // WINDOWS
+    DWORD tv = 1 * 1000;
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
 #endif
   }
 
