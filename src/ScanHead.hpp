@@ -79,7 +79,7 @@ class ScanHead {
    * Causes the receive port to become active and begin listening for UDP
    * messages from the scan head.
    */
-  void ReceiveStart();
+  void ReceiveStart(uint32_t scan_interval_us=0);
 
   /**
    * Stops receiving UDP messages from the receive port.
@@ -247,6 +247,7 @@ class ScanHead {
   SOCKET m_fd;
   int m_port;
   int32_t m_active_count;
+  uint32_t m_scan_interval_us;
   uint8_t *m_packet_buf;
   uint32_t m_packet_buf_len;
   uint64_t m_packets_received;

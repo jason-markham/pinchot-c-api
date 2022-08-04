@@ -25,6 +25,7 @@ ScanHead::ScanHead(ScanManager &manager, uint32_t serial_number, uint32_t id)
     m_fd(0),
     m_port(0),
     m_active_count(0),
+    m_scan_interval_us(0),
     m_packets_received(0),
     m_packets_received_for_profile(0),
     m_complete_profiles_received(0),
@@ -104,7 +105,7 @@ int ScanHead::GetReceivePort() const
   return m_port;
 }
 
-void ScanHead::ReceiveStart()
+void ScanHead::ReceiveStart(uint32_t scan_interval_us)
 {
   {
     std::lock_guard<std::mutex> lock(m_mutex);
@@ -114,6 +115,7 @@ void ScanHead::ReceiveStart()
     m_last_profile_source = 0;
     m_last_profile_timestamp = 0;
     m_active_count = 1;
+    m_scan_interval_us = scan_interval_us;
     m_is_data_available_condition_enabled = true;
     // reset circular buffer holding profile data
     m_circ_buffer.clear();
@@ -140,11 +142,27 @@ uint32_t ScanHead::AvailableProfiles()
 uint32_t ScanHead::WaitUntilAvailableProfiles(uint32_t count,
                                               uint32_t timeout_us)
 {
-  std::chrono::duration<uint32_t, std::micro> timeout(timeout_us);
-  std::unique_lock<std::mutex> lock(m_mutex);
-  m_thread_sync.wait_for(
-    lock, timeout, [this, count] { return m_circ_buffer.size() >= count; });
-  return static_cast<uint32_t>(m_circ_buffer.size());
+  // poll per scan period
+  const std::chrono::microseconds chrono_sleep_time(m_scan_interval_us);
+  uint32_t elapsed_time_us = 0;
+  uint32_t size = 0;
+
+  while (1) {
+    size = m_circ_buffer.size();
+
+    if (count <= size) {
+      break;
+    }
+
+    if (timeout_us <= elapsed_time_us) {
+      break;
+    }
+
+    std::this_thread::sleep_for(chrono_sleep_time);
+    elapsed_time_us += m_scan_interval_us;
+  }
+
+  return size;
 }
 
 std::vector<std::shared_ptr<Profile>> ScanHead::GetProfiles(uint32_t count)
@@ -303,29 +321,32 @@ ScanWindow &ScanHead::GetWindow()
 
 void ScanHead::PushProfile(std::shared_ptr<Profile> profile)
 {
-  // private function, assume mutex is already locked
-  m_circ_buffer.push_back(profile);
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_circ_buffer.push_back(profile);
+  }
   m_thread_sync.notify_all();
 }
 
 void ScanHead::PushStatus(StatusMessage status)
 {
-  // private function, assume mutex is already locked
-  m_ip_address = status.GetScanHeadIp();
-  m_status = status;
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_ip_address = status.GetScanHeadIp();
+    m_status = status;
 
-  uint16_t val = status.GetVersionInformation().product;
-  m_product_type = (JS_SCAN_HEAD_JS50WX == val) ? JS_SCAN_HEAD_JS50WX
-                                                : (JS_SCAN_HEAD_JS50WSC == val)
-                                                    ? JS_SCAN_HEAD_JS50WSC
-                                                    : JS_SCAN_HEAD_INVALID_TYPE;
+    uint16_t val = status.GetVersionInformation().product;
+    m_product_type =
+      (JS_SCAN_HEAD_JS50WX == val) ? JS_SCAN_HEAD_JS50WX :
+      (JS_SCAN_HEAD_JS50WSC == val) ? JS_SCAN_HEAD_JS50WSC :
+      JS_SCAN_HEAD_INVALID_TYPE;
+  }
 
   m_thread_sync.notify_all();
 }
 
 void ScanHead::ProcessPacket(DataPacket &packet)
 {
-  // private function, assume mutex is already locked
   uint32_t source = 0;
   uint64_t timestamp = 0;
   uint32_t raw_len = 0;
@@ -477,7 +498,6 @@ void ScanHead::ReceiveMain()
       // Check to make sure we are still running in case recv returns due to
       // its socket fd being closed.
       if (0 < m_active_count) {
-        std::unique_lock<std::mutex> lock(m_mutex);
         if (static_cast<std::size_t>(num_bytes) < sizeof(DatagramHeader)) {
           // TODO: better error handling!
           // throw std::runtime_error("Short header");

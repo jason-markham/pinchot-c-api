@@ -271,7 +271,7 @@ void ScanManager::Disconnect()
 
 void ScanManager::StartScanning()
 {
-  double scan_interval_us = (1.0 / scan_rate_hz) * 1e6;
+  uint32_t scan_interval_us = static_cast<uint32_t>((1.0 / scan_rate_hz) * 1e6);
 
   if (!IsConnected()) {
     std::string error_msg = "Not connected.";
@@ -290,12 +290,12 @@ void ScanManager::StartScanning()
   for (auto const &pair : scanners_by_serial) {
     ScanHead *scan_head = pair.second;
 
-    scan_head->ReceiveStart();
+    scan_head->ReceiveStart(scan_interval_us);
 
     auto fmt = scan_head->GetDataFormat();
     auto port = scan_head->GetReceivePort();
     auto id = scan_head->GetId();
-    uint32_t interval = static_cast<uint32_t>(scan_interval_us);
+    uint32_t interval = scan_interval_us;
     uint32_t count = 0xFFFFFFFF;
     auto config = scan_head->GetConfiguration();
 
@@ -314,7 +314,7 @@ void ScanManager::StartScanning()
 
 void ScanManager::StartScanning(ScanHead *scan_head)
 {
-  double scan_interval_us = (1.0 / scan_rate_hz) * 1e6;
+  uint32_t scan_interval_us = static_cast<uint32_t>((1.0 / scan_rate_hz) * 1e6);
 
   if (!IsConnected()) {
     std::string error_msg = "Not connected.";
@@ -335,12 +335,12 @@ void ScanManager::StartScanning(ScanHead *scan_head)
   std::vector<std::pair<uint32_t, Datagram>> requests;
   requests.reserve(1);
 
-  scan_head->ReceiveStart();
+  scan_head->ReceiveStart(scan_interval_us);
 
   auto fmt = scan_head->GetDataFormat();
   auto port = scan_head->GetReceivePort();
   auto id = scan_head->GetId();
-  uint32_t interval = static_cast<uint32_t>(scan_interval_us);
+  uint32_t interval = scan_interval_us;
   uint32_t count = 0xFFFFFFFF;
   auto config = scan_head->GetConfiguration();
 
