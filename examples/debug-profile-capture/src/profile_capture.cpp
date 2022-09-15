@@ -225,7 +225,7 @@ int main(int argc, char *argv[])
   int32_t r = 0;
 
   try {
-    cxxopts::Options options(argv[0], " - benchmark Joescan C API");
+    cxxopts::Options options(argv[0], "capture & save profiles to file");
     std::string ft;
     std::string lzr;
     std::string window;
