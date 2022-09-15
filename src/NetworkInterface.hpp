@@ -35,6 +35,8 @@ class NetworkInterface {
   static net_iface InitBroadcastSocket(uint32_t ip, uint16_t port);
   static net_iface InitRecvSocket(uint32_t ip, uint16_t port);
   static net_iface InitSendSocket(uint32_t ip, uint16_t port);
+  static net_iface InitTCPSocket(uint32_t ip, uint16_t port,
+                                 uint32_t timeout_s);
   static void CloseSocket(SOCKET sockfd);
 
   static std::vector<uint32_t> GetActiveIpAddresses();

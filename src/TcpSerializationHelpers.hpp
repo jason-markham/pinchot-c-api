@@ -12,9 +12,11 @@
 #include <string>
 #include <typeinfo>
 #include <vector>
-
-#include "NetworkIncludes.hpp"
-#include "NetworkTypes.hpp"
+#ifdef _WIN32
+#include <WinSock2.h>
+#else
+#include <arpa/inet.h>
+#endif
 
 namespace joescan {
 // TODO: This is really only needed for 64-bit values, it's probably worth
@@ -22,6 +24,9 @@ namespace joescan {
 template <typename T>
 T hostToNetwork(T value)
 {
+  // The number of bits per byte.
+  static const int kBitsPerByte = 8;
+
   T oneEnd = 0xff;
   if (*(reinterpret_cast<uint8_t *>(&oneEnd)) != 0xff) {
     return value;

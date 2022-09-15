@@ -5,6 +5,7 @@
  * root for license information.
  */
 
+#include <cassert>
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
@@ -14,11 +15,10 @@
 #include "NetworkInterface.hpp"
 #include "NetworkTypes.hpp"
 
+#include <fcntl.h>
 #ifdef __linux__
-#include <arpa/inet.h>
 #include <ifaddrs.h>
-#include <netdb.h>
-#include <sys/types.h>
+#include <netinet/tcp.h>
 #include <unistd.h>
 #else
 #include <ws2tcpip.h>
@@ -26,6 +26,10 @@
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "ws2_32.lib")
 #endif
+
+#define ERROR_STR \
+  (std::string(__FILE__) + ":" + std::to_string(__LINE__) + " " + \
+   strerror(errno));
 
 using namespace joescan;
 
@@ -68,8 +72,18 @@ net_iface NetworkInterface::InitBroadcastSocket(uint32_t ip, uint16_t port)
   r = setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &bcast_en, sizeof(bcast_en));
   if (SOCKET_ERROR == r) {
     CloseSocket(sockfd);
-    throw std::runtime_error("faild to enable socket broadcast");
+    std::string e = ERROR_STR;
+    throw std::runtime_error(e);
   }
+
+  #if __linux__
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    assert(flags != -1);
+    fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+  #else
+    u_long mode = 1; // 1 to enable non-blocking socket
+    ioctlsocket(sockfd, FIONBIO, &mode);
+  #endif
 
   return iface;
 }
@@ -88,25 +102,25 @@ net_iface NetworkInterface::InitRecvSocket(uint32_t ip, uint16_t port)
     int n = kRecvSocketBufferSize;
 #ifdef __linux__
     socklen_t sz = sizeof(n);
-    r = setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (void *)&n, sz);
+    r = setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, static_cast<void *>(&n), sz);
     if (SOCKET_ERROR != r) {
-      r = getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (void *)&m, &sz);
+      r = getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, static_cast<void *>(&m), &sz);
     }
 
     struct timeval tv;
     tv.tv_sec = 1;
     tv.tv_usec = 0;
-    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char *>(&tv), sizeof(tv));
 #else
     int sz = sizeof(n);
-    r = setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (char *)&n, sz);
+    r = setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char *>(&n), sz);
     if (SOCKET_ERROR != r) {
-      r = getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (char *)&m, &sz);
+      r = getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<char *>(&m), &sz);
     }
 
     // WINDOWS
     DWORD tv = 1 * 1000;
-    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char *>(&tv), sizeof(tv));
 #endif
   }
 
@@ -146,7 +160,7 @@ std::vector<uint32_t> NetworkInterface::GetActiveIpAddresses()
       while (p) {
         struct sockaddr *a = p->ifa_addr;
         uint32_t ip_addr = ((a) && (a->sa_family == AF_INET))
-                             ? ntohl(((struct sockaddr_in *)a)->sin_addr.s_addr)
+                             ? ntohl((reinterpret_cast<struct sockaddr_in *>(a))->sin_addr.s_addr)
                              : 0;
 
         if ((0 != ip_addr) && (INADDR_LOOPBACK != ip_addr)) {
@@ -206,7 +220,8 @@ net_iface NetworkInterface::InitUDPSocket(uint32_t ip, uint16_t port)
 
   sockfd = socket(AF_INET, SOCK_DGRAM, 0);
   if (-1 == sockfd) {
-    throw std::runtime_error("Failed to create socket");
+    std::string e = ERROR_STR;
+    throw std::runtime_error(e);
   }
 
   struct sockaddr_in addr;
@@ -218,14 +233,95 @@ net_iface NetworkInterface::InitUDPSocket(uint32_t ip, uint16_t port)
   r = bind(sockfd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr));
   if (0 != r) {
     CloseSocket(sockfd);
-    throw std::runtime_error("Unable to bind the scan socket");
+    std::string e = ERROR_STR;
+    throw std::runtime_error(e);
   }
 
   socklen_t len = sizeof(addr);
   r = getsockname(sockfd, reinterpret_cast<struct sockaddr *>(&addr), &len);
   if (0 != r) {
     CloseSocket(sockfd);
-    throw std::runtime_error("Unable to retrieve the scan socket name");
+    std::string e = ERROR_STR;
+    throw std::runtime_error(e);
+  }
+
+  memset(&iface, 0, sizeof(net_iface));
+  iface.sockfd = sockfd;
+  iface.ip_addr = ntohl(addr.sin_addr.s_addr);
+  iface.port = ntohs(addr.sin_port);
+
+  return iface;
+}
+
+net_iface NetworkInterface::InitTCPSocket(uint32_t ip, uint16_t port,
+                                          uint32_t timeout_s)
+{
+  net_iface iface;
+  SOCKET sockfd = INVALID_SOCKET;
+  int r = 0;
+
+  sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (-1 == sockfd) {
+    std::string e = ERROR_STR;
+    throw std::runtime_error(e);
+  }
+
+//#ifdef __linux__
+  //struct timeval tv;
+  //tv.tv_sec = timeout_s;
+  //tv.tv_usec = 0;
+//#else
+  //uint32_t tv = timeout_s * 1000;
+//#endif
+
+  //const char *opt = reinterpret_cast<const char *>(&tv);
+
+  //r = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, opt, sizeof(tv));
+  //if (0 != r) {
+    //CloseSocket(sockfd);
+    //std::string e = ERROR_STR;
+    //throw std::runtime_error(e);
+  //}
+
+  //r = setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, opt, sizeof(tv));
+  //if (0 != r) {
+    //CloseSocket(sockfd);
+    //std::string e = ERROR_STR;
+    //throw std::runtime_error(e);
+  //}
+
+
+  int one = 1;
+#ifdef __linux__
+  r = setsockopt(sockfd, SOL_TCP, TCP_NODELAY, &one, sizeof(one));
+#else
+  r = setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY,
+                 reinterpret_cast<char*>(&one), sizeof(one));
+#endif
+  if (0 != r) {
+    CloseSocket(sockfd);
+    std::string e = ERROR_STR;
+    throw std::runtime_error(e);
+  }
+
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(port);
+  addr.sin_addr.s_addr = htonl(ip);
+  r = connect(sockfd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr));
+  if (0 != r) {
+    CloseSocket(sockfd);
+    std::string e = ERROR_STR;
+    throw std::runtime_error(e);
+  }
+
+  socklen_t len = sizeof(addr);
+  r = getsockname(sockfd, reinterpret_cast<struct sockaddr *>(&addr), &len);
+  if (0 != r) {
+    CloseSocket(sockfd);
+    std::string e = ERROR_STR;
+    throw std::runtime_error(e);
   }
 
   memset(&iface, 0, sizeof(net_iface));

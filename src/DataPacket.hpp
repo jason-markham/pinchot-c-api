@@ -29,11 +29,13 @@ class DataPacket {
   DataPacket(uint8_t *bytes, uint32_t num_bytes, uint64_t received_timestamp);
   DataPacket(const DataPacket &other) = default;
 
-  int GetSourceId() const;
+  uint32_t GetSourceId() const;
   uint8_t GetScanHeadId() const;
-  jsCamera GetCamera() const;
-  jsLaser GetLaser() const;
+  uint32_t GetCameraPort() const;
+  uint32_t GetLaserPort() const;
   uint64_t GetTimeStamp() const;
+  uint32_t GetSequenceNumber() const;
+
   /**
    * Profile data can be transmitted over the wire through multiple UDP
    * packets if the payload is large enough. This function returns the
@@ -75,7 +77,7 @@ class DataPacket {
   int m_num_content_types;
   std::vector<int64_t> m_encoders;
 
-  friend class Profile;
+  friend struct ProfileBuilder;
 };
 
 inline FragmentLayout DataPacket::GetFragmentLayout(DataType type) const

@@ -8,6 +8,9 @@
 #include "ScanWindow.hpp"
 #include "Point2D.hpp"
 
+#include <cstring>
+#include <stdexcept>
+
 using namespace joescan;
 
 ScanWindow::ScanWindow(double top, double bottom, double left, double right)
@@ -21,7 +24,8 @@ ScanWindow::ScanWindow(double top, double bottom, double left, double right)
     throw std::range_error("window right must be greater than window left");
   }
 
-  // convert from inches to 1/1000 of an inch
+  // convert from units to 1/1000 of a unit
+  // units are either inches or millimeter
   int32_t top1000 = static_cast<int32_t>(top * 1000.0);
   int32_t bottom1000 = static_cast<int32_t>(bottom * 1000.0);
   int32_t left1000 = static_cast<int32_t>(left * 1000.0);

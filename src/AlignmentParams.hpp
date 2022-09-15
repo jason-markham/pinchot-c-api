@@ -9,6 +9,7 @@
 #define JOESCAN_ALIGNMENT_PARAMS_H
 
 #include "Point2D.hpp"
+#include "joescan_pinchot.h"
 
 namespace joescan {
 
@@ -17,16 +18,20 @@ class AlignmentParams {
   /**
    * Initialize the AlinmentParams object for use in coordinate conversion.
    *
+   * @param camera_to_mill_scale scale to be applied to transform.
    * @param roll The rotation to be applied along the Z axis.
-   * @param shift_x The shift to be applied specified in inches.
-   * @param shift_y The shift to be applied specified in inches.
-   * @param flip_x Set to `true` to rotate the coordinate system by 180
+   * @param shift_x The shift to be applied specified in scan system units.
+   * @param shift_y The shift to be applied specified in scan system units.
+   * @param cable The cable orientation of the scan head.
    * degrees about the Y axis, placing postive X at former negative X.
    */
-  AlignmentParams(double roll = 0.0, double shift_x = 0.0, double shift_y = 0.0,
-                  bool flip_x = false);
+  AlignmentParams(double camera_to_mill_scale = 1.0 , double roll = 0.0,
+                  double shift_x = 0.0, double shift_y = 0.0,
+                  jsCableOrientation cable=JS_CABLE_ORIENTATION_UPSTREAM);
 
   AlignmentParams(const AlignmentParams &other) = default;
+
+  jsCableOrientation GetCableOrientation() const;
 
   /**
    * Obtain the applied rotation for use in coordinate conversion.
@@ -38,32 +43,28 @@ class AlignmentParams {
   /**
    * Obtain the applied X direction shift for use in coordinate conversion.
    *
-   * @return The current X shift expressed in inches.
+   * @return The current X shift expressed in scan system units.
    */
   double GetShiftX() const;
 
   /**
    * Obtain the applied Y direction shift for use in coordinate conversion.
    *
-   * @return The current Y shift expressed in inches.
+   * @return The current Y shift expressed in scan system units.
    */
   double GetShiftY() const;
 
-  /**
-   * Obtain the flip configuration of X axis.
-   *
-   * @return Boolean `true` if X axis is flipped, `false` otherwise.
-   */
-  bool GetFlipX() const;
+  void SetCableOrientation(jsCableOrientation cable);
 
   /**
    * For XY profile data, this will rotate the points around the mill
    * coordinate system origin.
    *
    * @param roll The rotation to be applied.
-   * @param flip_x Set to `true` to rotate the coordinate system by 180
+   * @param is_cable_downstream Set to `true` to rotate the coordinate system
+   * by 180
    */
-  void SetRoll(double roll, bool flip_x = false);
+  void SetRoll(double roll);
 
   /**
    * For XY profile data, apply the specified shift to X when converting
@@ -92,8 +93,8 @@ class AlignmentParams {
   /**
    * Convert XY profile data from camera coordinates to mill coordinates.
    *
-   * @param x Geometry X value expressed in 1/1000 inches.
-   * @param y Geometry Y value expressed in 1/1000 inches.
+   * @param x Geometry X value expressed in 1/1000 scan system units.
+   * @param y Geometry Y value expressed in 1/1000 scan system units.
    * @return Converted geometry point.
    */
   inline Point2D<int32_t> CameraToMill(int32_t x, int32_t y) const;
@@ -109,29 +110,30 @@ class AlignmentParams {
   /**
    * Convert XY profile data from mill coordinates to camera coordinates.
    *
-   * @param x Geometry X value expressed in 1/1000 inches.
-   * @param y Geometry Y value expressed in 1/1000 inches.
+   * @param x Geometry X value expressed in 1/1000 scan system units.
+   * @param y Geometry Y value expressed in 1/1000 scan system units.
    * @return Converted geometry point.
    */
   inline Point2D<int32_t> MillToCamera(int32_t x, int32_t y) const;
 
  private:
-  static double rho;
-  double roll;
-  double yaw;
-  double sin_roll;
-  double cos_roll;
-  double cos_yaw;
-  double sin_neg_roll;
-  double cos_neg_roll;
-  double cos_neg_yaw;
-  double cos_yaw_times_cos_roll;
-  double cos_yaw_times_sin_roll;
-  double shift_x;
-  double shift_y;
-  double shift_x_1000;
-  double shift_y_1000;
-  bool flip_x;
+  void CalculateTransform();
+
+  jsCableOrientation m_cable;
+  double m_roll;
+  double m_shift_x;
+  double m_shift_y;
+  double m_shift_x_1000;
+  double m_shift_y_1000;
+  double m_camera_to_mill_xx;
+  double m_camera_to_mill_xy;
+  double m_camera_to_mill_yx;
+  double m_camera_to_mill_yy;
+  double m_mill_to_camera_xx;
+  double m_mill_to_camera_xy;
+  double m_mill_to_camera_yx;
+  double m_mill_to_camera_yy;
+  double m_camera_to_mill_scale;
 };
 
 /*
@@ -150,8 +152,11 @@ inline Point2D<int32_t> AlignmentParams::CameraToMill(int32_t x,
   double yd = static_cast<double>(y);
 
   // now calculate the mill values for both X and Y
-  double xm = (xd * cos_yaw_times_cos_roll) - (yd * sin_roll) + shift_x_1000;
-  double ym = (xd * cos_yaw_times_sin_roll) + (yd * cos_roll) + shift_y_1000;
+  double xm = (xd * m_camera_to_mill_xx) - (yd * m_camera_to_mill_xy) +
+              m_shift_x_1000;
+
+  double ym = (xd * m_camera_to_mill_yx) + (yd * m_camera_to_mill_yy) +
+              m_shift_y_1000;
 
   // now convert back to int32_t values
   int32_t xi = static_cast<int32_t>(xm);
@@ -173,10 +178,11 @@ inline Point2D<int32_t> AlignmentParams::MillToCamera(int32_t x,
   double yd = static_cast<double>(y);
 
   // now calculate the camera values for both X and Y
-  double xc = ((xd - shift_x_1000) * cos_neg_yaw * cos_neg_roll) -
-              ((yd - shift_y_1000) * cos_neg_yaw * sin_neg_roll);
-  double yc =
-    ((xd - shift_x_1000) * sin_neg_roll) + ((yd - shift_y_1000) * cos_neg_roll);
+  double xc = ((xd - m_shift_x_1000) * m_mill_to_camera_xx) -
+              ((yd - m_shift_y_1000) * m_mill_to_camera_xy);
+
+  double yc = ((xd - m_shift_x_1000) * m_mill_to_camera_yx) +
+              ((yd - m_shift_y_1000) * m_mill_to_camera_yy);
 
   // now convert back to int32_t values
   int32_t xi = static_cast<int32_t>(xc);

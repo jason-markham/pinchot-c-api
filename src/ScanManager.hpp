@@ -9,14 +9,15 @@
 #define JOESCAN_SCAN_MANAGER_H
 
 #include "AlignmentParams.hpp"
-#include "PinchotConstants.hpp"
-#include "Profile.hpp"
-#include "ScanHeadSender.hpp"
-
+#include "PhaseTable.hpp"
+#include "ProfileBuilder.hpp"
 #include "joescan_pinchot.h"
 
+#include <condition_variable>
 #include <map>
+#include <mutex>
 #include <string>
+#include <thread>
 
 namespace joescan {
 class ScanHead;
@@ -26,7 +27,7 @@ class ScanManager {
   /**
    * @brief Creates a new scan manager object;
    */
-  ScanManager();
+  ScanManager(jsUnits units);
 
   /**
    * @brief Destructor for the `ScanManager` object.
@@ -34,21 +35,48 @@ class ScanManager {
   ~ScanManager();
 
   /**
-   * @brief Creates a `ScanHead` object used to receive scan data.
+   * @brief Returns the unique identifier for the scan system.
    *
-   * @param serial_number The serial number of the scan head.
-   * @return A shared pointer to an object representing the scan head.
+   * @returns The UID of the scan system.
    */
-  ScanHead* CreateScanner(uint32_t serial_number);
+  uint32_t GetUID();
+
+  /**
+   * @brief Performs broadcast discover on all available network interfaces.
+   *
+   * @return The total number of scan heads discovered on success, negative
+   * value mapping to `jsError` on error.
+   */
+  int32_t Discover();
+
+  /**
+   * @brief Obtains information on the scan heads discovered during the call to
+   * the `Discover` function.
+   *
+   * @param results Pointer to array to be filled with discover data.
+   * @param max_results Length of `results` array.
+   * @return The total number of scan heads discovered on success, negative
+   * value mapping to `jsError` on error.
+   */
+  int32_t ScanHeadsDiscovered(jsDiscovered *results, uint32_t max_results);
+
+  /**
+   * @brief Returns a pointer to the `PhaseTable` object used by the
+   * `ScanSystem` to determine how scanning is to occur during a scan period.
+   *
+   * @return A pointer to the `PhaseTable`.
+   */
+  PhaseTable* GetPhaseTable();
 
   /**
    * @brief Creates a `ScanHead` object used to receive scan data.
    *
    * @param serial_number The serial number of the scan head.
+   * @param type Product type of the scan head.
    * @param id The ID to associate with the scan head.
-   * @return A shared pointer to an object representing the scan head.
+   * @return `0` on success, negative value mapping to `jsError` on error.
    */
-  ScanHead* CreateScanner(uint32_t serial_number, uint32_t id);
+  int32_t CreateScanHead(uint32_t serial_number, uint32_t id);
 
   /**
    * @brief Gets a `ScanHead` object used to receive scan data.
@@ -70,20 +98,22 @@ class ScanManager {
    * @brief Removes a `ScanHead` object from use.
    *
    * @param serial_number The serial number of the scan head to remove.
+   * @return `0` on success, negative value mapping to `jsError` on error.
    */
-  void RemoveScanner(uint32_t serial_number);
+  int32_t RemoveScanHead(uint32_t serial_number);
 
   /**
    * @brief Removes a `ScanHead` object from use.
    *
-   * @param scanHead A shared pointer of the scan head object to remove.
+   * @param scan_head A pointer of the scan head object to remove.
+   * @return `0` on success, negative value mapping to `jsError` on error.
    */
-  void RemoveScanner(ScanHead* scanHead);
+  int32_t RemoveScanHead(ScanHead* scan_head);
 
   /**
    * @brief Removes all created `ScanHead` objects from use.
    */
-  void RemoveAllScanners();
+  void RemoveAllScanHeads();
 
   /**
    * @brief Returns the total number of `ScanHead` objects associated with
@@ -95,13 +125,12 @@ class ScanManager {
 
   /**
    * @brief Attempts to connect to all `ScanHead` objects that were previously
-   * created using `CreateScanner` call.
+   * created using `CreateScanHead` call.
    *
    * @param timeout_s Maximum time to allow for connection.
-   *
-   * @return A vector to all scan heads that successfully connected.
+   * @return `0` on success, negative value mapping to `jsError` on error.
    */
-  std::map<uint32_t, ScanHead*> Connect(uint32_t timeout_s);
+  int32_t Connect(uint32_t timeout_s);
 
   /**
    * @brief Disconnects all `ScanHead` objects that were previously connected
@@ -112,63 +141,34 @@ class ScanManager {
   /**
    * @brief Starts scanning on all `ScanHead` objects that were connected
    * using the `Connect` function.
-   */
-  void StartScanning();
-
-  /**
-   * @brief Starts scanning on a single `ScanHead` object that was connected
-   * using the `Connect` function.
    *
-   * @note This will place the entire scan manager into a "scanning" state.
-   * Stop scanning will need to be called before scanning on additional scan
-   * heads.
+   * @param period_us Scan period in microseconds.
+   * @param fmt The data format of scan data.
+   * @return `0` on success, negative value mapping to `jsError` on error.
    */
-  void StartScanning(ScanHead* scan_head);
+  int StartScanning(uint32_t period_us, jsDataFormat fmt);
 
   /**
    * @brief Stop scanning on all `ScanHead` objects that were told to scan
    * through the `StartScanning` function.
+   *
+   * @return `0` on success, negative value mapping to `jsError` on error.
    */
-  void StopScanning();
+  int32_t StopScanning();
 
   /**
-   * @brief Requests an image from each camera on a given scan head.
+   * @brief Gets the minimum scan period achievable for a given scan system.
    *
-   * @param scan_head The `ScanHead` to get images from.
-   * @param config Configuration to use for image capture.
-   *
-   * @return The number of images collected on success, negative value on error.
+   * @return The minimum scan period in microseconds.
    */
-  int RequestImages(ScanHead *scan_head, jsScanHeadConfiguration &config);
+  uint32_t GetMinScanPeriod();
 
   /**
-   * @brief Sets the rate at which new data is sent from the scan head.
+   * @brief Gets the measurement units specified for the `ScanManager`.
    *
-   * @param rate_hz The frequency of new data in hertz.
+   * @return The configured measurement units.
    */
-  void SetScanRate(double rate_hz);
-
-  /**
-   * @brief Gets the rate at which new data is sent from the scan head.
-   *
-   * @return The configured frequency of new data in hertz.
-   */
-  double GetScanRate() const;
-
-  /**
-   * @brief Gets the max scan rate achievable for a given scan system.
-   *
-   * @return The maximum frequency in hertz.
-   */
-  double GetMaxScanRate();
-
-  /**
-   * @brief Configures the type of data and its resolution to be returned
-   * from the scan head when performing a scan.
-   *
-   * @param format The format the data will be presented in
-   */
-  void SetRequestedDataFormat(jsDataFormat format);
+  jsUnits GetUnits() const;
 
   /**
    * @brief Boolean state function used to determine if the `ScanManager` has
@@ -187,31 +187,43 @@ class ScanManager {
   inline bool IsScanning() const;
 
  private:
+  /**
+   * The amount of time cameras start exposing before the laser turns on. This
+   * needs to be accounted for by both the phase table and the min scan period
+   * since they are set relative to laser on times. If ignored, a scheduler
+   * tick could happen while a camera is exposing if the scan period is set
+   * aggressively.
+  **/
+  static const uint32_t kCameraStartEarlyOffsetNs = 9500;
+
   enum SystemState { Disconnected, Connected, Scanning };
 
-  std::map<uint32_t, ScanHead*> BroadcastConnect(uint32_t timeout_s);
-  void FillVersionInformation(VersionInformation& vi);
+  void KeepAliveThread();
 
-  std::map<uint32_t, ScanHead*> scanners_by_serial;
-  std::map<uint32_t, ScanHead*> scanners_by_id;
-  ScanHeadSender sender;
+  std::map<uint32_t, std::shared_ptr<jsDiscovered>> m_serial_to_discovered;
+  std::map<uint32_t, ScanHead*> m_serial_to_scan_head;
+  std::map<uint32_t, ScanHead*> m_id_to_scan_head;
+  std::thread m_keep_alive_thread;
+  std::condition_variable m_condition;
+  std::mutex m_mutex;
 
-  uint8_t session_id = 1;
-  const double kScanRateHzMax = kPinchotConstantMaxScanRate;
-  const double kScanRateHzMin = kPinchotConstantMinScanRate;
-  double scan_rate_hz = 0.0;
+  PhaseTable m_phase_table;
+  SystemState m_state;
+  jsUnits m_units;
 
-  SystemState state = SystemState::Disconnected;
+  static uint32_t m_uid_count;
+  uint32_t m_uid;
 };
 
 inline bool ScanManager::IsConnected() const
 {
-  return state == SystemState::Connected;
+  return (m_state == SystemState::Connected) ||
+         (m_state == SystemState::Scanning);
 }
 
 inline bool ScanManager::IsScanning() const
 {
-  return state == SystemState::Scanning;
+  return m_state == SystemState::Scanning;
 }
 } // namespace joescan
 
