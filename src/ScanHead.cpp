@@ -736,8 +736,8 @@ int32_t ScanHead::GetProfile(jsCamera camera, jsLaser laser,
     profile->laser = LaserPortToId(data->laser_port());
     profile->laser_on_time_us = data->laser_on_time_ns() / 1000;
     profile->num_encoder_values = encoders_size;
-    profile->udp_packets_received = 0;
-    profile->udp_packets_expected = 0;
+    profile->packets_received = 0;
+    profile->packets_expected = 0;
     profile->data_len = JS_RAW_PROFILE_DATA_LEN;
     profile->data_valid_brightness = data->valid_points();
     profile->data_valid_xy = data->valid_points();
@@ -1530,6 +1530,12 @@ void ScanHead::ProcessProfile(uint8_t *buf, uint32_t len)
 
 void ScanHead::ReceiveMain()
 {
+#ifndef __linux__
+  // bump up thread priority; receiving profiles is the most important thing
+  // for end users
+  SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+#endif
+
   while (m_is_receive_thread_active) {
     uint8_t *buf = m_packet_buf;
 #ifdef __linux__

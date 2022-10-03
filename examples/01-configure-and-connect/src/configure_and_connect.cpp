@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
     config.laser_detection_threshold = 120;
     config.saturation_threshold = 800;
     config.saturation_percentage = 30;
-    r = jsScanHeadConfigure(scan_head, &config);
+    r = jsScanHeadSetConfiguration(scan_head, &config);
     if (0 > r) {
       throw ApiError("failed to set scan head configuration", r);
     }
@@ -241,7 +241,7 @@ int main(int argc, char *argv[])
     // the 3D measurement. For this example, we'll assume that the scan head
     // is mounted perfectly such that the laser is pointed directly at the scan
     // target.
-    r = jsScanHeadSetAlignment(scan_head, 0.0, 0.0, 0.0, false);
+    r = jsScanHeadSetAlignment(scan_head, 0.0, 0.0, 0.0);
     if (0 > r) {
       throw ApiError("failed to set alignment", r);
     }

@@ -288,7 +288,7 @@ void initialize_scan_heads(jsScanSystem &scan_system,
     std::cout << serial << " v" << major << "." << minor << "." << patch
               << std::endl;
 
-    r = jsScanHeadConfigure(scan_head, &config);
+    r = jsScanHeadSetConfiguration(scan_head, &config);
     if (0 > r) {
       throw ApiError("failed to configure scan head", r);
     }
@@ -298,7 +298,7 @@ void initialize_scan_heads(jsScanSystem &scan_system,
       throw ApiError("failed to set scan window", r);
     }
 
-    r = jsScanHeadSetAlignment(scan_head, 0.0, 0.0, 0.0, false);
+    r = jsScanHeadSetAlignment(scan_head, 0.0, 0.0, 0.0);
     if (0 > r) {
       throw ApiError("failed to set alignment", r);
     }

@@ -24,7 +24,7 @@ static std::mutex _mtx;
 static std::vector<uint64_t> _recv_profiles;
 static std::vector<uint64_t> _recv_packets;
 static std::vector<uint64_t> _exp_packets;
-static bool _is_load = false;
+
 // these are included to help avoid the transform from getting optimized out
 static volatile double _x = 0.0;
 static volatile double _y = 0.0;
@@ -58,46 +58,6 @@ void PrintStatus(jsScanHeadStatus &stat)
   std::cout << "\tnum_profiles_sent=" << stat.num_profiles_sent << std::endl;
 }
 
-static void transform(jsProfile *profiles, uint32_t num_profiles)
-{
-  static const double roll = 1.0;
-  static const double pitch = 2.0;
-  static const double yaw = 3.0;
-  static const double rho = M_PI / 180.0;
-  static const double shift_x = 10.0;
-  static const double shift_y = 20.0;
-  static const double shift_z = 30.0;
-  static const double cos_roll = std::cos(roll * rho);
-  static const double cos_pitch = std::cos(pitch * rho);
-  static const double cos_yaw = std::cos(yaw * rho);
-  static const double sin_roll = std::sin(roll * rho);
-  static const double sin_pitch = std::sin(pitch * rho);
-  static const double sin_yaw = std::sin(yaw * rho);
-
-  for (uint32_t m = 0; m < num_profiles; m++) {
-    for (uint32_t n = 0; n < profiles[m].data_len; n++) {
-      if (0 == profiles[m].data[n].brightness) {
-        continue;
-      }
-
-      double x = static_cast<double>(profiles[m].data[n].x) / 1000.0;
-      double y = static_cast<double>(profiles[m].data[n].y) / 1000.0;
-
-      double xt = x * cos_yaw * cos_roll - y * sin_roll + shift_x;
-
-      double yt = x * (cos_yaw * sin_roll * cos_pitch + sin_yaw * sin_pitch) +
-                  y * cos_roll * cos_pitch + shift_y;
-
-      double zt = x * (cos_yaw * sin_pitch * sin_roll - cos_pitch * sin_yaw) +
-                  y * cos_roll * sin_pitch + shift_z;
-
-      _x = xt;
-      _y = yt;
-      _z = zt;
-    }
-  }
-}
-
 /**
  * @brief This function receives profile data from a given scan head. We start
  * a thread for each scan head to pull out the data as fast as possible.
@@ -122,7 +82,7 @@ static void receiver(jsScanHead scan_head)
   while (1) {
     int32_t r = 0;
 
-    r = jsScanHeadWaitUntilProfilesAvailable(scan_head, 10, 50000);
+    r = jsScanHeadWaitUntilProfilesAvailable(scan_head, 10, 100000);
     if (0 > r) {
       std::cout << "ERROR jsScanHeadWaitUntilProfilesAvailable returned" << r
                 << std::endl;
@@ -141,14 +101,11 @@ static void receiver(jsScanHead scan_head)
       continue;
     }
 
-    if (_is_load) {
-      transform(profiles, r);
-    }
     _mtx.lock();
     _recv_profiles[idx] += r;
     for (int n = 0; n < r; n++) {
-      _recv_packets[idx] += profiles[n].udp_packets_received;
-      _exp_packets[idx] += profiles[n].udp_packets_expected;
+      _recv_packets[idx] += profiles[n].packets_received;
+      _exp_packets[idx] += profiles[n].packets_expected;
     }
     _mtx.unlock();
   }
@@ -181,7 +138,7 @@ int main(int argc, char *argv[])
   int32_t r = 0;
 
   try {
-    cxxopts::Options options(argv[0], " - benchmark Joescan C API");
+    cxxopts::Options options(argv[0], "scanning benchmark for Joescan C API");
     std::string serials;
     std::string ft;
     std::string lzr;
@@ -195,7 +152,6 @@ int main(int argc, char *argv[])
       "p,period", "scan period in us", cxxopts::value<uint32_t>(period_us))(
       "s,serial", "Serial numbers", cxxopts::value<std::string>(serials))(
       "w,window", "Scan window inches", cxxopts::value<std::string>(window))(
-      "load", "Enable synthetic load", cxxopts::value<bool>(_is_load))(
       "status", "Get status while scanning", cxxopts::value<bool>(is_status))(
       "h,help", "Print help");
 
@@ -224,7 +180,7 @@ int main(int argc, char *argv[])
       } else if ((0 == ft.compare("quarter")) || (0 == ft.compare("QUARTER"))) {
         fmt = JS_DATA_FORMAT_XY_BRIGHTNESS_QUARTER;
       } else {
-        std::cout << "invalianHead scan_head)d format: " << ft << std::endl;
+        std::cout << "invalid format: " << ft << std::endl;
         exit(1);
       }
     }

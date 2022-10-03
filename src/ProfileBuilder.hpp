@@ -57,8 +57,8 @@ struct ProfileBuilder {
 
   inline void SetPacketInfo(uint32_t received, uint32_t expected)
   {
-    raw->udp_packets_received = received;
-    raw->udp_packets_expected = expected;
+    raw->packets_received = received;
+    raw->packets_expected = expected;
   }
 
   inline void InsertBrightness(uint32_t idx, uint8_t value)

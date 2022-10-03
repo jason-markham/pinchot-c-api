@@ -919,12 +919,6 @@ EXPORTED int32_t jsScanHeadGetFirmwareVersion(jsScanHead scan_head,
 }
 
 EXPORTED
-int32_t jsScanHeadConfigure(jsScanHead scan_head, jsScanHeadConfiguration *cfg)
-{
-  return jsScanHeadSetConfiguration(scan_head, cfg);
-}
-
-EXPORTED
 int32_t jsScanHeadSetConfiguration(jsScanHead scan_head,
                                    jsScanHeadConfiguration *cfg)
 {
@@ -1408,8 +1402,8 @@ int32_t jsScanHeadGetProfiles(jsScanHead scan_head, jsProfile *profiles,
       profiles[m].sequence_number = p[m]->sequence_number;
       profiles[m].laser_on_time_us = p[m]->laser_on_time_us;
       profiles[m].format = p[m]->format;
-      profiles[m].udp_packets_received = p[m]->udp_packets_received;
-      profiles[m].udp_packets_expected = p[m]->udp_packets_expected;
+      profiles[m].packets_received = p[m]->packets_received;
+      profiles[m].packets_expected = p[m]->packets_expected;
       profiles[m].num_encoder_values = p[m]->num_encoder_values;
       memcpy(profiles[m].encoder_values, p[m]->encoder_values,
              p[m]->num_encoder_values * sizeof(uint64_t));

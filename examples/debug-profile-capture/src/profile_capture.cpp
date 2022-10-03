@@ -78,6 +78,37 @@ static uint32_t count_digits(uint32_t n)
   return count;
 }
 
+/**
+ * @brief This function takes the received profile data and writes it to the
+ * file name specified on the command line.
+ *
+ * @param out_file_name The file name as a string to store the profiles to.
+ */
+static void saver_bin(std::string out_file_name)
+{
+  std::ofstream f;
+  int num_profiles_remaining = 0;
+  unsigned int n = 0;
+  int sleep_ms = 1;
+
+  f.open(out_file_name + ".bin", std::ios::out | std::ios::binary);
+  num_profiles_remaining = _num_profiles_requested;
+
+  while (_is_running && (0 != num_profiles_remaining)) {
+    while (n < _num_profiles_received) {
+      auto *p = &_profiles[n];
+      f.write((char *) p, sizeof(jsProfile));
+      num_profiles_remaining--;
+      n++;
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+  }
+
+  _is_running = false;
+  f.close();
+}
+
 static void saver_csv(std::string out_file_name)
 {
   std::ofstream f;
@@ -102,19 +133,6 @@ static void saver_csv(std::string out_file_name)
 #endif
     _is_running = false;
   }
-
-  //f.open(out_file_name + "/config.txt");
-  //f << "period: " << _period_us << "\n";
-  //f << "roll: " << _roll << "\n";
-  //f << "window: " << _window_top << "," << _window_bottom << "," << _window_left
-    //<< "," << _window_right << "\n";
-  //f << "laser on min us: " << _config.laser_on_time_min_us << "\n";
-  //f << "laser on def us: " << _config.laser_on_time_def_us << "\n";
-  //f << "laser on max us: " << _config.laser_on_time_max_us << "\n";
-  //f << "laser threshold: " << _config.laser_detection_threshold << "\n";
-  //f << "laser saturation: " << _config.saturation_threshold << "\n";
-  //f << "saruration percent: " << _config.saturation_percentage << "\n";
-  //f.close();
 
   while (_is_running && (0 != num_profiles_remaining)) {
     while (n < _num_profiles_received) {
@@ -177,8 +195,8 @@ static void saver_txt(std::string out_file_name)
 
       f << "\tlaser_on_time_us: " << p->laser_on_time_us << "\n";
       f << "\tformat: " << p->format << std::endl;
-      f << "\tudp_packets_received: " << p->udp_packets_received << "\n";
-      f << "\tudp_packets_expected: " << p->udp_packets_expected << "\n";
+      f << "\tpackets_received: " << p->packets_received << "\n";
+      f << "\tpackets_expected: " << p->packets_expected << "\n";
       f << "\tdata_len: " << p->data_len << "\n";
 
 #ifndef _SKIP_PROFILE_DATA
@@ -201,7 +219,6 @@ static void saver_txt(std::string out_file_name)
   f.close();
 }
 
-
 int main(int argc, char *argv[])
 {
   jsScanSystem scan_system = 0;
@@ -220,12 +237,13 @@ int main(int argc, char *argv[])
   double window_left = -20.0;
   double window_right = 20.0;
   double roll = 0.0;
-  bool is_output_csv = false;
+  bool is_out_bin = false;
+  bool is_out_csv = false;
   uint32_t serial = 0;
   int32_t r = 0;
 
   try {
-    cxxopts::Options options(argv[0], "capture & save profiles to file");
+    cxxopts::Options options(argv[0], "capture and save jsProfile data");
     std::string ft;
     std::string lzr;
     std::string window;
@@ -238,7 +256,8 @@ int main(int argc, char *argv[])
       "s,serial", "Serial number", cxxopts::value<std::uint32_t>(serial))(
       "threshold", "Laser detect threshold", cxxopts::value<uint32_t>(thresh))(
       "w,window", "Scan window inches", cxxopts::value<std::string>(window))(
-      "csv", "Output X/Y CSV file", cxxopts::value<bool>(is_output_csv))(
+      "bin", "Output jsProfile binary file", cxxopts::value<bool>(is_out_bin))(
+      "csv", "Output X/Y CSV file", cxxopts::value<bool>(is_out_csv))(
       "roll", "Set alignment roll", cxxopts::value<double>(roll))(
       "h,help", "Print help");
 
@@ -256,7 +275,7 @@ int main(int argc, char *argv[])
       } else if ((0 == ft.compare("quarter")) || (0 == ft.compare("QUARTER"))) {
         fmt = JS_DATA_FORMAT_XY_BRIGHTNESS_QUARTER;
       } else {
-        std::cout << "invalianHead scan_head)d format: " << ft << std::endl;
+        std::cout << "invalid format: " << ft << std::endl;
         exit(1);
       }
     }
@@ -308,6 +327,11 @@ int main(int argc, char *argv[])
           window_right = window_top;
         }
       }
+
+      if (is_out_bin && is_out_csv) {
+        std::cout << "can't save binary and csv" << std::endl;
+        exit(1);
+      }
     }
 
   } catch (const cxxopts::OptionException &e) {
@@ -333,7 +357,9 @@ int main(int argc, char *argv[])
     app.StartScanning(period_us, fmt, &receiver);
 
     // And another thread for writing data out to file.
-    if (is_output_csv) {
+    if (is_out_bin) {
+      thread_save = std::thread(saver_bin, out_name);
+    } else if (is_out_csv) {
       thread_save = std::thread(saver_csv, out_name);
     } else {
       thread_save = std::thread(saver_txt, out_name);

@@ -417,13 +417,13 @@ typedef struct {
    */
   jsDataFormat format;
   /**
-   * @brief Number of UDP packets received for the profile. If less than
-   * `udp_packets_expected`, then the profile data is incomplete. Generally,
+   * @brief Number of packets received for the profile. If less than
+   * `packets_expected`, then the profile data is incomplete. Generally,
    * this implies some type of network issue.
    */
-  uint32_t udp_packets_received;
-  /** @brief Total number of UDP packets expected to comprise the profile. */
-  uint32_t udp_packets_expected;
+  uint32_t packets_received;
+  /** @brief Total number of packets expected to comprise the profile. */
+  uint32_t packets_expected;
   /**
    * @brief The total number of valid scan line measurement points for this
    * profile held in the `data` array.
@@ -486,13 +486,13 @@ typedef struct {
    */
   jsDataFormat format;
   /**
-   * @brief Number of UDP packets received for the profile. If less than
-   * `udp_packets_expected`, then the profile data is incomplete. Generally,
+   * @brief Number of packets received for the profile. If less than
+   * `packets_expected`, then the profile data is incomplete. Generally,
    * this implies some type of network issue.
    */
-  uint32_t udp_packets_received;
-  /** @brief Total number of UDP packets expected to comprise the profile. */
-  uint32_t udp_packets_expected;
+  uint32_t packets_received;
+  /** @brief Total number of packets expected to comprise the profile. */
+  uint32_t packets_expected;
   /**
    * @brief The total length of profile data held in the `data` array. This
    * value will be less than or equal to `JS_RAW_PROFILE_DATA_LEN` and should
@@ -826,11 +826,11 @@ EXPORTED int32_t PRE jsScanSystemPhaseInsertLaser(
  *
  * @note This function will use the `jsScanHeadConfiguration` provided as a
  * function argument when configuring this particular camera for scanning
- * rather than that specified in `jsScanHeadConfigure`.
+ * rather than that specified in `jsScanHeadSetConfiguration`.
  *
  * @note Only the `laser_on_time_max_us`, `laser_on_time_def_us`, and
- * `laser_on_time_min_us` fields from `jsScanHeadConfigure` are currently used
- * for per phase configuration.
+ * `laser_on_time_min_us` fields from `jsScanHeadSetConfiguration`
+ * are currently used for per phase configuration.
  *
  * @note This function should be used with scan heads that are camera driven.
  *
@@ -853,11 +853,11 @@ EXPORTED int32_t PRE jsScanSystemPhaseInsertCameraConfiguration(
  *
  * @note This function will use the `jsScanHeadConfiguration` provided as a
  * function argument when configuring this particular camera for scanning
- * rather than that specified in `jsScanHeadConfigure`.
+ * rather than that specified in `jsScanHeadSetConfiguration`.
  *
  * @note Only the `laser_on_time_max_us`, `laser_on_time_def_us`, and
- * `laser_on_time_min_us` fields from `jsScanHeadConfigure` are currently used
- * for per phase configuration.
+ * `laser_on_time_min_us` fields from `jsScanHeadSetConfiguration` are
+ * currently used for per phase configuration.
  *
  * @note This function should be used with scan heads that are laser driven.
  *
@@ -985,22 +985,6 @@ EXPORTED int32_t PRE jsScanHeadGetFirmwareVersion(
  */
 EXPORTED bool PRE jsScanHeadIsConnected(
   jsScanHead scan_head) POST;
-
-/**
- * @brief Configures the scan head according to the parameters specified.
- *
- * @deprecated Use `jsScanHeadSetConfiguration`.
- *
- * @note The configuration settings are sent to the scan head during the call
- * to `jsScanSystemStartScanning()`.
- *
- * @param scan_head Reference to scan head to be configured.
- * @param cfg The `jsScanHeadConfiguration` to be applied.
- * @return `0` on success, negative value mapping to `jsError` on error.
- */
-EXPORTED int32_t PRE jsScanHeadConfigure(
-  jsScanHead scan_head,
-  jsScanHeadConfiguration *cfg) POST;
 
 /**
  * @brief Configures the scan head according to the parameters specified.

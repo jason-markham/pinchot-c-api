@@ -146,7 +146,7 @@ class ScanApplication {
       m_scan_heads.push_back(scan_head);
 
       // We'll use the same configuration here for each scan head.
-      r = jsScanHeadConfigure(scan_head, &m_config);
+      r = jsScanHeadSetConfiguration(scan_head, &m_config);
       if (0 > r) {
         throw ApiError("failed to configure scan head", r);
       }
